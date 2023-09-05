@@ -297,7 +297,7 @@ export default {
 </script>
 
 <style scoped>
-@import "azure-maps-control/dist/atlas.min.css";
+/* @import "azure-maps-control/dist/atlas.min.css"; */
 
 header {
   width: calc(100vw - 10px);
@@ -381,20 +381,20 @@ header img {
   right: 10px;
   box-shadow: 0px 0px 4px rgba(0, 0, 0, 0.16);
   background-color: white;
-  background-image: url("images/GpsIcon.png");
+  /* background-image: url("images/GpsIcon.png"); */
 }
 
 #myLocationBtn:hover {
-  background-image: url("images/GpsIcon-hover.png");
+  /* background-image: url("images/GpsIcon-hover.png"); */
 }
 
 #searchBtn {
   background-color: transparent;
-  background-image: url("images/SearchIcon.png");
+  /* background-image: url("images/SearchIcon.png"); */
 }
 
 #searchBtn:hover {
-  background-image: url("images/SearchIcon-hover.png");
+  /* background-image: url("images/SearchIcon-hover.png"); */
 }
 
 .listItem {

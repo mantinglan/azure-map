@@ -1,16 +1,16 @@
 <template>
   <div id="app">
-    <!-- <div id="map" style="width: 100vw; height: 80vh"></div>
+    <div id="map" style="width: 100vw; height: 80vh"></div>
     <button @click="search">Search</button>
-    <button @click="route">Route</button> -->
-    <SeachMap></SeachMap>
+    <button @click="route">Route</button>
+    <!-- <SeachMap></SeachMap> -->
   </div>
 </template>
 
 <script>
 import * as atlas from "azure-maps-control";
 import * as atlasService from "azure-maps-rest";
-import SeachMap from "./components/SeachMap";
+// import SeachMap from "./components/SeachMap";
 export default {
   name: "app",
   data: () => ({
@@ -201,13 +201,13 @@ export default {
     },
   },
   components: {
-    SeachMap,
+    // SeachMap,
   },
 };
 </script>
 
 <style>
-@import "azure-maps-control/dist/atlas.min.css";
+/* @import "azure-maps-control/dist/atlas.min.css"; */
 #app {
   font-family: "Avenir", Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
