@@ -1,7 +1,26 @@
 <template>
   <div id="app">
+    <div class="search">
+      <input type="text" v-model="searchTxt" @keyup.enter="searchPoi" />
+      <div v-if="searchResult.length > 0">
+        <ul id="results-panel">
+          <li
+            v-for="item in searchResult"
+            :key="item.bbox"
+            @click="itemClicked(item.properties.id)"
+          >
+            <div class="title">{{ item.properties.poi.name }}</div>
+            <div class="info">
+              {{
+                `${item.properties.type}:${item.properties.address.freeformAddress} `
+              }}
+            </div>
+          </li>
+        </ul>
+      </div>
+    </div>
     <div id="map" style="width: 100vw; height: 80vh"></div>
-    <button @click="search">Search</button>
+    <!-- <button @click="search">Search</button> -->
     <button @click="route">Route</button>
     <!-- <SeachMap></SeachMap> -->
   </div>
@@ -14,6 +33,8 @@ import * as atlasService from "azure-maps-rest";
 export default {
   name: "app",
   data: () => ({
+    searchTxt: "",
+    searchResult: [],
     map: null,
     datasource: null,
     popup: null,
@@ -123,6 +144,38 @@ export default {
           });
         });
     },
+    searchPoi() {
+      //Use MapControlCredential to share authentication between a map control and the service module.
+      var pipeline = atlasService.MapsURL.newPipeline(
+        new atlasService.MapControlCredential(this.map)
+      );
+
+      // Construct the SearchURL object
+      var searchURL = new atlasService.SearchURL(pipeline);
+      var query = this.searchTxt;
+      // var radius = 9000;
+      // var lat = 47.64452336193245;
+      // var lon = -122.13687658309935;
+
+      searchURL
+        .searchPOI(atlasService.Aborter.timeout(10000), query, {
+          lon: this.map.getCamera().center[0],
+          lat: this.map.getCamera().center[1],
+          maxFuzzyLevel: 4,
+          view: "Auto",
+        })
+        .then((results) => {
+          // Extract GeoJSON feature collection from the response and add it to the datasource
+          var data = results.geojson.getFeatures();
+          this.datasource.add(data);
+
+          this.map.setCamera({
+            bounds: data.bbox,
+          });
+          console.log(data);
+          this.searchResult = data.features;
+        });
+    },
     showPopup(e) {
       //Get the properties and coordinates of the first shape that the event occurred on.
 
@@ -149,7 +202,7 @@ export default {
     route() {
       //Create the GeoJSON objects which represent the start and end points of the route.
       var startPoint = new atlas.data.Feature(
-        new atlas.data.Point([-122.130137, 47.644702]),
+        new atlas.data.Point([-122.356099, 47.580045]),
         {
           title: "Redmond",
           icon: "pin-blue",
@@ -157,7 +210,7 @@ export default {
       );
 
       var endPoint = new atlas.data.Feature(
-        new atlas.data.Point([-122.3352, 47.61397]),
+        new atlas.data.Point([-122.201164, 47.61694]),
         {
           title: "Seattle",
           icon: "pin-round-blue",
@@ -207,7 +260,7 @@ export default {
 </script>
 
 <style>
-/* @import "azure-maps-control/dist/atlas.min.css"; */
+/* @import '../node_modules/azure-maps-control/dist/atlas.min.css'; */
 #app {
   font-family: "Avenir", Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -219,5 +272,20 @@ export default {
 #myMap {
   width: 100vh;
   height: 100%;
+}
+.search {
+  width: 400px;
+  position: absolute;
+  z-index: 2000;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 20px;
+}
+#results-panel {
+  list-style: none;
+}
+#results-panel > li {
+  border-top: 1px dotted #ccc;
+  padding: 10px 20px;
 }
 </style>

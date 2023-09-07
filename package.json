@@ -9,17 +9,18 @@
   },
   "dependencies": {
     "@vue/cli-plugin-babel": "4.1.1",
+    "axios": "^1.5.0",
     "azure-maps-control": "3.0.0",
     "azure-maps-rest": "2.1.0",
+    "sass": "^1.66.1",
     "vue": "^2.6.11"
   },
   "devDependencies": {
-    "@vue/cli-plugin-eslint": "4.1.1",
-    "@vue/cli-service": "4.1.1",
-    "babel-eslint": "^10.0.3",
-    "eslint": "^6.7.2",
-    "eslint-plugin-vue": "^6.0.1",
-    "vue-template-compiler": "^2.6.11"
+    "eslint": "^7.32.0",
+    "eslint-config-prettier": "^6.15.0",
+    "eslint-plugin-prettier": "^3.4.1",
+    "eslint-plugin-vue": "^9.17.0",
+    "prettier": "^2.8.8"
   },
   "eslintConfig": {
     "root": true,
