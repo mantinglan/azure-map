@@ -1,62 +1,93 @@
 <template>
-  <div>
-    <div>
-      <div class="searchPanel">
-        <div>
-          <input
-            id="searchTbx"
-            v-model="searchStr"
-            type="search"
-            placeholder="Find a store"
-          />
-          <button id="searchBtn" title="Search" @click="performSearch">
-            Search
-          </button>
-        </div>
+  <div id="SearchMap">
+    <div class="searchPanel">
+      <div>
+        <input
+          id="searchTbx"
+          type="search"
+          v-model="searchTxt"
+          @keyup.enter="searchPoi"
+          placeholder="Input Text"
+        />
+        <button id="searchBtn" title="Search" @click="searchPoi"></button>
       </div>
-
-      <div id="listPanel">
-        <div v-for="item in searchResult">
-          {{ item }}
-        </div>
-      </div>
-
-      <div id="myMap"></div>
-
-      <button
-        id="myLocationBtn"
-        @click="setMapToUserLocation"
-        tle="My Location"
-      >
-        +
-      </button>
     </div>
+    <div id="listPanel">
+      <div v-if="searchResult.length > 0">
+        <div
+          class="listItem"
+          v-for="item in searchResult"
+          :key="item.bbox"
+          @click="itemClicked(item)"
+          @mouseover="itemHovered(item)"
+        >
+          <div class="listItem-title">{{ item.properties.poi.name }}</div>
+          <div class="info">
+            {{
+              `${item.properties.type}:${item.properties.address.freeformAddress} `
+            }}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="map-wrapper">
+      <div id="myMap"></div>
+    </div>
+    <button
+      id="myLocationBtn"
+      title="My Location"
+      @click="setMapToUserLocation"
+    ></button>
+    <!-- <button @click="search">Search</button> -->
+    <!-- <button @click="route">Route</button> -->
   </div>
 </template>
 
 <script>
 import * as atlas from "azure-maps-control";
 import * as atlasService from "azure-maps-rest";
-var maxClusterZoomLevel = 11;
-var storeLocationDataUrl = "../data/ContosoCoffee.txt";
-var iconImageUrl = "/tutorials/simple-store-locator/images/CoffeeIcon.png";
-var countrySet = ["US", "CA", "GB", "FR", "DE", "IT", "ES", "NL", "DK"];
+const maxClusterZoomLevel = 11;
+const clinentId = "ALw62kW5frp2GJpHANGIvriZZdLTUlZBvQvde3IBgqA";
+const currentConditionsUrl = `https://atlas.microsoft.com/weather/currentConditions/json?api-version=1.0&subscription-key=${clinentId}`;
+const weatherTemplate = {
+  //The title tag for the popup.
+  title: "Current Conditions",
+
+  //HTML string template with placeholders for properties of the weather response.
+  content:
+    '<img class="weather-icon" src="/images/icons/weather-black/{iconCode}.png"/>' +
+    '<div class="weather-content">' +
+    '<div class="weather-temp">{temperature/value}&#176;</div>' +
+    "RealFeel®: {realFeelTemperature/value}&#176;C" +
+    '<div class="weather-phrase">{phrase}</div>' +
+    "Humidity: {relativeHumidity}&#37</div>",
+
+  //Format numbers with two decimal places.
+  numberFormat: {
+    maximumFractionDigits: 2,
+  },
+
+  //Since we trust the data being retrieve, don't sandbox the content so that we can use CSS classes.
+  sandboxContent: false,
+};
 export default {
   data() {
     return {
-      searchStr: "",
+      searchTxt: "",
       searchResult: [],
       map: null,
+      datasource: null,
       popup: null,
       centerMarker: null,
-      searchURL: "",
     };
   },
+
   mounted() {
-    this.initialize();
+    console.log(atlas);
+    this.initMap();
   },
   methods: {
-    initialize() {
+    initMap() {
       console.log("in");
       this.map = new atlas.Map("myMap", {
         center: [-110, 50],
@@ -64,23 +95,19 @@ export default {
         view: "Auto",
         authOptions: {
           authType: "subscriptionKey",
-          subscriptionKey: "ALw62kW5frp2GJpHANGIvriZZdLTUlZBvQvde3IBgqA",
+          subscriptionKey: clinentId,
         },
       });
       this.map.events.add("ready", () => {
-        // this.map.setTraffic({
-        //   flow: "relative",
-        // });
+        const that = this;
+        this.map.setTraffic({
+          incidents: true,
+          flow: "relative",
+        });
         // Register the map click handler
         this.datasource = new atlas.source.DataSource();
         this.map.sources.add(this.datasource);
 
-        var pipeline = atlasService.MapsURL.newPipeline(
-          new atlasService.MapControlCredential(this.map)
-        );
-
-        // Construct the SearchURL object
-        this.searchURL = new atlasService.SearchURL(pipeline);
         var resultLayer = new atlas.layer.SymbolLayer(this.datasource, null, {
           iconOptions: {
             image: "pin-round-darkblue",
@@ -96,7 +123,13 @@ export default {
         this.popup = new atlas.Popup();
 
         //Add a mouse over event to the result layer and display a popup when this event fires.
-        this.map.events.add("mouseover", resultLayer, this.showPopup);
+        this.map.events.add("mouseover", resultLayer, function (e) {
+          console.log(this);
+          //Make sure the event occurred on a shape feature.
+          if (e.shapes && e.shapes.length > 0) {
+            that.showPopup(e.shapes[0]);
+          }
+        });
 
         this.map.layers.add(
           new atlas.layer.LineLayer(this.datasource, null, {
@@ -126,106 +159,36 @@ export default {
             ], //Only render Point or MultiPoints in this layer.
           })
         );
-      });
-    },
-    showPopup(e) {
-      var p = e.shapes[0].getProperties();
-      var position = e.shapes[0].getCoordinates();
-
-      //Create HTML from properties of the selected result.
-      var html = `
-      <div style="padding:5px">
-        <div><b>${p.poi.name}</b></div>
-        <div>${p.address.freeformAddress}</div>
-        <div>${position[1]}, ${position[0]}</div>
-      </div>`;
-
-      //Update the content and position of the popup.
-      this.popup.setPopupOptions({
-        content: html,
-        position: position,
-      });
-
-      //Open the popup.
-      this.popup.open(this.map);
-    },
-    loadStoreData() {
-      //Download the store location data.
-      fetch(storeLocationDataUrl)
-        .then((response) => response.text())
-        .then(function (text) {
-          //Parse the Tab delimited file data into GeoJSON features.
-          var features = [];
-
-          //Split the lines of the file.
-          var lines = text.split("\n");
-
-          //Grab the header row.
-          var row = lines[0].split("\t");
-
-          //Parse the header row and index each column, so that when our code for parsing each row is easier to follow.
-          var header = {};
-          var numColumns = row.length;
-          var i;
-
-          for (i = 0; i < row.length; i++) {
-            header[row[i]] = i;
-          }
-
-          //Skip the header row and then parse each row into a GeoJSON feature.
-          for (i = 1; i < lines.length; i++) {
-            row = lines[i].split("\t");
-
-            //Ensure that the row has the right number of columns.
-            if (row.length >= numColumns) {
-              features.push(
-                new atlas.data.Feature(
-                  new atlas.data.Point([
-                    parseFloat(row[header["Longitude"]]),
-                    parseFloat(row[header["Latitude"]]),
-                  ]),
-                  {
-                    AddressLine: row[header["AddressLine"]],
-                    City: row[header["City"]],
-                    Municipality: row[header["Municipality"]],
-                    AdminDivision: row[header["AdminDivision"]],
-                    Country: row[header["Country"]],
-                    PostCode: row[header["PostCode"]],
-                    Phone: row[header["Phone"]],
-                    StoreType: row[header["StoreType"]],
-                    IsWiFiHotSpot:
-                      row[header["IsWiFiHotSpot"]].toLowerCase() === "true"
-                        ? true
-                        : false,
-                    IsWheelchairAccessible:
-                      row[header["IsWheelchairAccessible"]].toLowerCase() ===
-                      "true"
-                        ? true
-                        : false,
-                    Opens: parseInt(row[header["Opens"]]),
-                    Closes: parseInt(row[header["Closes"]]),
-                  }
-                )
-              );
-            }
-          }
-
-          //Add the features to the data source.
-          this.datasource.add(features);
-
-          //Initially update the list items.
-          this.updateListItems();
+        //Add a zoom control to the map.
+        this.map.controls.add(new atlas.control.ZoomControl(), {
+          position: "top-right",
         });
+        //Add an HTML marker to the map to indicate the center to use for searching.
+        this.centerMarker = new atlas.HtmlMarker({
+          htmlContent: '<div class="mapCenterIcon"></div>',
+          position: this.map.getCamera().center,
+        });
+
+        this.map.markers.add(this.centerMarker);
+        //Add a click event to the map.
+        this.map.events.add("click", this.getWeatherForPoint);
+      });
     },
-    performSearch() {
-      var query = this.searchStr;
+    search() {
+      //Use MapControlCredential to share authentication between a map control and the service module.
+      var pipeline = atlasService.MapsURL.newPipeline(
+        new atlasService.MapControlCredential(this.map)
+      );
+
+      // Construct the SearchURL object
+      var searchURL = new atlasService.SearchURL(pipeline);
+      var query = "gasoline-station";
       var radius = 9000;
       var lat = 47.64452336193245;
       var lon = -122.13687658309935;
 
-      //Perform a fuzzy search on the users query.
-      this.searchURL
-        .searchPOI(atlasService.Aborter.timeout(3000), query, {
+      searchURL
+        .searchPOI(atlasService.Aborter.timeout(10000), query, {
           limit: 10,
           lat: lat,
           lon: lon,
@@ -233,8 +196,7 @@ export default {
           view: "Auto",
         })
         .then((results) => {
-          console.log(results.results);
-          //Parse the response into GeoJSON so that the map can understand.
+          // Extract GeoJSON feature collection from the response and add it to the datasource
           var data = results.geojson.getFeatures();
           this.datasource.add(data);
 
@@ -244,26 +206,85 @@ export default {
             zoom: 10,
             padding: 15,
           });
-          if (results.results.length > 0) {
-            //Set the camera to the bounds of the results.
-            this.map.setCamera({
-              bounds: data.bbox,
-              padding: 40,
-            });
-            this.searchResult = results.results;
-          } else {
-            document.getElementById("listPanel").innerHTML =
-              '<div class="statusMessage">Unable to find the location you searched for.</div>';
-          }
         });
     },
+    searchPoi() {
+      //Use MapControlCredential to share authentication between a map control and the service module.
+      var pipeline = atlasService.MapsURL.newPipeline(
+        new atlasService.MapControlCredential(this.map)
+      );
 
+      // Construct the SearchURL object
+      var searchURL = new atlasService.SearchURL(pipeline);
+      var query = this.searchTxt;
+      // var radius = 9000;
+      // var lat = 47.64452336193245;
+      // var lon = -122.13687658309935;
+
+      searchURL
+        .searchPOI(atlasService.Aborter.timeout(10000), query, {
+          lon: this.map.getCamera().center[0],
+          lat: this.map.getCamera().center[1],
+          maxFuzzyLevel: 4,
+          view: "Auto",
+        })
+        .then((results) => {
+          // Extract GeoJSON feature collection from the response and add it to the datasource
+          var data = results.geojson.getFeatures();
+          this.datasource.add(data);
+
+          this.map.setCamera({
+            bounds: data.bbox,
+          });
+          console.log(data);
+          this.searchResult = data.features;
+        });
+    },
+    showPopup(shape) {
+      console.log({ shape });
+      //Get the properties and coordinates of the first shape that the event occurred on.
+
+      // var p = e.shapes[0].getProperties();
+      // var position = e.shapes[0].getCoordinates();
+
+      var properties = shape.getProperties();
+
+      //Create HTML from properties of the selected result.
+      var html = `
+      <div style="padding:5px">
+        <div><b>${properties.poi.name}</b></div>
+        <div>${properties.address.freeformAddress}</div>
+        <div>${properties.address.freeformAddress}</div>
+      </div>`;
+
+      //Update the content and position of the popup.
+      this.popup.setPopupOptions({
+        content: html,
+        position: shape.getCoordinates(),
+      });
+
+      //Open the popup.
+      this.popup.open(this.map);
+    },
+    itemHovered(item) {
+      console.log("in", item);
+      //Show a popup when hovering an item in the result list.
+      var shape = this.datasource.getShapeById(item.id);
+      console.log(shape);
+      this.showPopup(shape);
+    },
+    itemClicked(item) {
+      this.map.setCamera({
+        bounds: item.bbox,
+      });
+    },
     setMapToUserLocation() {
+      const that = this;
       //Request the user's location.
       navigator.geolocation.getCurrentPosition(
         function (position) {
           //Convert the geolocation API position into a longitude/latitude position value the map can understand and center the map over it.
-          this.map.setCamera({
+          that.map.setCamera({
             center: [position.coords.longitude, position.coords.latitude],
             zoom: maxClusterZoomLevel + 1,
           });
@@ -283,51 +304,132 @@ export default {
             case error.UNKNOWN_ERROR:
               alert("An unknown error occurred.");
               break;
-            default:
-              alert("Other error occurred.");
-              break;
           }
         }
       );
     },
+    route() {
+      //Create the GeoJSON objects which represent the start and end points of the route.
+      var startPoint = new atlas.data.Feature(
+        new atlas.data.Point([-122.356099, 47.580045]),
+        {
+          title: "Redmond",
+          icon: "pin-blue",
+        }
+      );
 
-    //Initialize the application when the page is loaded.
+      var endPoint = new atlas.data.Feature(
+        new atlas.data.Point([-122.201164, 47.61694]),
+        {
+          title: "Seattle",
+          icon: "pin-round-blue",
+        }
+      );
+
+      //Add the data to the data source.
+      this.datasource.add([startPoint, endPoint]);
+
+      this.map.setCamera({
+        bounds: atlas.data.BoundingBox.fromData([startPoint, endPoint]),
+        padding: 80,
+      });
+      //Use MapControlCredential to share authentication between a map control and the service module.
+      var pipeline = atlasService.MapsURL.newPipeline(
+        new atlasService.MapControlCredential(this.map)
+      );
+
+      //Construct the RouteURL object
+      var routeURL = new atlasService.RouteURL(pipeline);
+      //Start and end point input to the routeURL
+      var coordinates = [
+        [
+          startPoint.geometry.coordinates[0],
+          startPoint.geometry.coordinates[1],
+        ],
+        [endPoint.geometry.coordinates[0], endPoint.geometry.coordinates[1]],
+      ];
+
+      //Make a search route request
+      routeURL
+        .calculateRouteDirections(
+          atlasService.Aborter.timeout(10000),
+          coordinates
+        )
+        .then((directions) => {
+          //Get data features from response
+          var data = directions.geojson.getFeatures();
+          this.datasource.add(data);
+        });
+    },
+    getWeatherForPoint(e) {
+      //Close the popup if it is open.
+      this.popup.close();
+
+      //Request the current conditions weather data and show it in the pop up.
+      var requestUrl = `${currentConditionsUrl}&query=${e.position[1]},${e.position[0]}`;
+
+      this.$ajax.get(requestUrl).then((response) => {
+        // processRequest(requestUrl).then((response) => {
+        var content;
+        if (
+          response.data &&
+          response.data.results &&
+          response.data.results[0]
+        ) {
+          //Use the weatherTemplate settings to create templated content for the popup.
+          content = atlas.PopupTemplate.applyTemplate(
+            response.data.results[0],
+            weatherTemplate
+          );
+        } else {
+          content =
+            '<div style="padding:10px;">Weather data not available for this location.</div>';
+        }
+
+        this.popup.setOptions({
+          content: content,
+          position: e.position,
+        });
+
+        this.popup.open(this.map);
+      });
+    },
+  },
+  components: {
+    // SeachMap,
   },
 };
 </script>
 
 <style scoped>
 /* @import "azure-maps-control/dist/atlas.min.css"; */
-
-header {
-  width: calc(100vw - 10px);
-  height: 30px;
-  padding: 15px 0 20px 20px;
-  font-size: 25px;
-  font-style: italic;
-  font-family: "Comic Sans MS", cursive, sans-serif;
-  line-height: 30px;
-  font-weight: bold;
-  color: white;
-  background-color: #007faa;
+#SearchMap {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-wrap: wrap;
+  flex-direction: column;
 }
-
-header span {
-  vertical-align: middle;
+.search {
+  width: 400px;
+  position: absolute;
+  z-index: 2000;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 20px;
 }
-
-header img {
-  height: 30px;
-  vertical-align: middle;
-}
-
 .searchPanel {
   position: relative;
   width: 350px;
+  height: 80px;
+  flex-basis: 30%;
+  width: 40%;
+  order: 0;
 }
 
 .searchPanel div {
   padding: 20px;
+  display: flex;
 }
 
 .searchPanel input {
@@ -336,28 +438,38 @@ header img {
   border: 0;
   border-bottom: 1px solid #ccc;
 }
-
+.map-wrapper {
+  flex-basis: 100%;
+  width: 60%;
+}
 #listPanel {
-  position: absolute;
-  top: 135px;
-  left: 0px;
+  /* position: absolute;
+  top: 80px;
+  left: 0px; */
   width: 350px;
-  height: calc(100vh - 135px);
+  height: calc(100vh - 80px);
   overflow-y: auto;
+  flex-basis: 50%;
+  width: 40%;
+  order: 0;
 }
-
 #myMap {
-  position: absolute;
-  top: 65px;
-  left: 350px;
-  width: calc(100vw - 350px);
-  height: calc(100vh - 65px);
+  /* position: absolute;
+  top: 0;
+  left: 350px; */
+  /* width: calc(100vw - 350px); */
+  width: 100%;
+  height: 100%;
 }
-
-.statusMessage {
-  margin: 10px;
+#results-panel {
+  list-style: none;
+  overflow-y: auto;
+  max-height: calc(100vh - 119px);
 }
-
+#results-panel > li {
+  border-top: 1px dotted #ccc;
+  padding: 10px 20px;
+}
 #myLocationBtn,
 #searchBtn {
   margin: 0;
@@ -374,29 +486,26 @@ header img {
   background-position: center center;
   z-index: 200;
 }
-
 #myLocationBtn {
   position: absolute;
   top: 150px;
   right: 10px;
   box-shadow: 0px 0px 4px rgba(0, 0, 0, 0.16);
   background-color: white;
-  /* background-image: url("images/GpsIcon.png"); */
+  background-image: url("../assets/images/GpsIcon.png");
 }
 
 #myLocationBtn:hover {
-  /* background-image: url("images/GpsIcon-hover.png"); */
+  background-image: url("../assets/images/GpsIcon-hover.png");
 }
-
 #searchBtn {
   background-color: transparent;
-  /* background-image: url("images/SearchIcon.png"); */
+  background-image: url("../assets/images/SearchIcon.png");
 }
 
 #searchBtn:hover {
-  /* background-image: url("images/SearchIcon-hover.png"); */
-}
-
+  background-image: url("../assets/images/SearchIcon-hover.png");
+} /* Adjust the layout of the page when the screen width is fewer than 700 pixels. */
 .listItem {
   height: 50px;
   padding: 20px;
@@ -412,85 +521,34 @@ header img {
   color: #007faa;
   font-weight: bold;
 }
-
-.storePopup {
-  min-width: 150px;
-}
-
-.storePopup .popupTitle {
-  border-top-left-radius: 4px;
-  border-top-right-radius: 4px;
-  padding: 8px;
-  height: 30px;
-  background-color: #007faa;
-  color: white;
-  font-weight: bold;
-}
-
-.storePopup .popupSubTitle {
-  font-size: 10px;
-  line-height: 12px;
-}
-
-.storePopup .popupContent {
-  font-size: 11px;
-  line-height: 18px;
-  padding: 8px;
-}
-
-.storePopup img {
-  vertical-align: middle;
-  height: 12px;
-  margin-right: 5px;
-}
-
-/* Adjust the layout of the page when the screen width is fewer than 700 pixels. */
 @media screen and (max-width: 700px) {
+  #SearchMap {
+    flex-wrap: nowrap;
+  }
   .searchPanel {
-    width: 100vw;
+    width: 100%;
+    order: 0;
   }
 
   #listPanel {
-    top: 385px;
+    /* top: 385px; */
+    position: relative;
     width: 100%;
     height: calc(100vh - 385px);
+    order: 3;
+  }
+  .map-wrapper {
+    width: 100%;
+    order: 2;
   }
 
   #myMap {
-    width: 100vw;
-    height: 250px;
-    top: 135px;
-    left: 0px;
+    width: 100%;
+    /* height: 250px; */
   }
 
   #myLocationBtn {
     top: 220px;
-  }
-}
-
-.mapCenterIcon {
-  display: block;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: orange;
-  border: 2px solid white;
-  cursor: pointer;
-  box-shadow: 0 0 0 rgba(0, 204, 255, 0.4);
-  animation: pulse 3s infinite;
-}
-
-@keyframes pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(0, 204, 255, 0.4);
-  }
-
-  70% {
-    box-shadow: 0 0 0 50px rgba(0, 204, 255, 0);
-  }
-
-  100% {
-    box-shadow: 0 0 0 0 rgba(0, 204, 255, 0);
   }
 }
 </style>
